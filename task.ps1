@@ -1,20 +1,20 @@
 # Ensure you are logged in to Azure: Connect-AzAccount
 
 # --- Variables ---
-$resourceGroupName = "mate-resources"
+$resourceGroupName = "mate-azure-task-15" # As per requirement for VNet deployment
 $location = "EastUS" # You can choose a different location if desired
-$vnetName = "todo-vnet"
-$vnetAddressPrefix = "10.0.0.0/16"
+$vnetName = "todoapp" # As per requirement
+$vnetAddressPrefix = "10.20.30.0/24"
 
-# Subnet configurations
+# Subnet configurations (calculated to fit up to 50 VMs, requires /26 prefix)
 $webserversSubnetName = "webservers"
-$webserversSubnetPrefix = "10.0.1.0/24"
+$webserversSubnetPrefix = "10.20.30.0/26"
 
 $databaseSubnetName = "database"
-$databaseSubnetPrefix = "10.0.2.0/24"
+$databaseSubnetPrefix = "10.20.30.64/26"
 
 $managementSubnetName = "management"
-$managementSubnetPrefix = "10.0.3.0/24"
+$managementSubnetPrefix = "10.20.30.128/26"
 
 # --- Create Resource Group if it doesn't exist ---
 Write-Host "Checking for existing resource group '$resourceGroupName'..."
@@ -27,122 +27,23 @@ if (-not $resourceGroup) {
     Write-Host "Resource group '$resourceGroupName' already exists."
 }
 
-# --- Create Network Security Groups and Rules ---
-
-# Webservers NSG
-Write-Host "Creating Network Security Group '$webserversSubnetName-nsg' and rules..."
-$webserversVnetAllowRule = New-AzNetworkSecurityRuleConfig -Name "AllowVnetTrafficWebservers" `
-    -Description "Allow all traffic within the VNet for webservers" `
-    -Access Allow `
-    -Protocol "*" `
-    -Direction Inbound `
-    -Priority 100 `
-    -SourceAddressPrefix $vnetAddressPrefix `
-    -SourcePortRange "*" `
-    -DestinationAddressPrefix "*" `
-    -DestinationPortRange "*"
-
-$webserversHttpRule = New-AzNetworkSecurityRuleConfig -Name "AllowHTTP" `
-    -Description "Allow HTTP from Internet" `
-    -Access Allow `
-    -Protocol Tcp `
-    -Direction Inbound `
-    -Priority 200 `
-    -SourceAddressPrefix Internet `
-    -SourcePortRange "*" `
-    -DestinationAddressPrefix "*" `
-    -DestinationPortRange 80
-
-$webserversHttpsRule = New-AzNetworkSecurityRuleConfig -Name "AllowHTTPS" `
-    -Description "Allow HTTPS from Internet" `
-    -Access Allow `
-    -Protocol Tcp `
-    -Direction Inbound `
-    -Priority 210 `
-    -SourceAddressPrefix Internet `
-    -SourcePortRange "*" `
-    -DestinationAddressPrefix "*" `
-    -DestinationPortRange 443
-
-$webserversNsg = New-AzNetworkSecurityGroup -Name "$webserversSubnetName-nsg" `
-    -ResourceGroupName $resourceGroupName `
-    -Location $location `
-    -SecurityRules ($webserversVnetAllowRule, $webserversHttpRule, $webserversHttpsRule)
-
-Write-Host "NSG '$webserversSubnetName-nsg' created."
-
-# Database NSG
-Write-Host "Creating Network Security Group '$databaseSubnetName-nsg' and rules..."
-$databaseVnetAllowRule = New-AzNetworkSecurityRuleConfig -Name "AllowVnetTrafficDatabase" `
-    -Description "Allow all traffic within the VNet for database" `
-    -Access Allow `
-    -Protocol "*" `
-    -Direction Inbound `
-    -Priority 100 `
-    -SourceAddressPrefix $vnetAddressPrefix `
-    -SourcePortRange "*" `
-    -DestinationAddressPrefix "*" `
-    -DestinationPortRange "*"
-
-# No internet inbound traffic rules are explicitly defined for database.
-# Default deny rules will handle this.
-$databaseNsg = New-AzNetworkSecurityGroup -Name "$databaseSubnetName-nsg" `
-    -ResourceGroupName $resourceGroupName `
-    -Location $location `
-    -SecurityRules ($databaseVnetAllowRule)
-
-Write-Host "NSG '$databaseSubnetName-nsg' created."
-
-# Management NSG
-Write-Host "Creating Network Security Group '$managementSubnetName-nsg' and rules..."
-$managementVnetAllowRule = New-AzNetworkSecurityRuleConfig -Name "AllowVnetTrafficManagement" `
-    -Description "Allow all traffic within the VNet for management" `
-    -Access Allow `
-    -Protocol "*" `
-    -Direction Inbound `
-    -Priority 100 `
-    -SourceAddressPrefix $vnetAddressPrefix `
-    -SourcePortRange "*" `
-    -DestinationAddressPrefix "*" `
-    -DestinationPortRange "*"
-
-$managementSshRule = New-AzNetworkSecurityRuleConfig -Name "AllowSSH" `
-    -Description "Allow SSH from Internet" `
-    -Access Allow `
-    -Protocol Tcp `
-    -Direction Inbound `
-    -Priority 200 `
-    -SourceAddressPrefix Internet `
-    -SourcePortRange "*" `
-    -DestinationAddressPrefix "*" `
-    -DestinationPortRange 22
-
-$managementNsg = New-AzNetworkSecurityGroup -Name "$managementSubnetName-nsg" `
-    -ResourceGroupName $resourceGroupName `
-    -Location $location `
-    -SecurityRules ($managementVnetAllowRule, $managementSshRule)
-
-Write-Host "NSG '$managementSubnetName-nsg' created."
-
-# --- Create Virtual Network and Subnets ---
-Write-Host "Configuring subnets with NSGs..."
+# --- Create Subnet Configurations ---
+Write-Host "Configuring subnets..."
 $webserversSubnet = New-AzVirtualNetworkSubnetConfig -Name $webserversSubnetName `
-    -AddressPrefix $webserversSubnetPrefix `
-    -NetworkSecurityGroup $webserversNsg
+    -AddressPrefix $webserversSubnetPrefix
 
 $databaseSubnet = New-AzVirtualNetworkSubnetConfig -Name $databaseSubnetName `
-    -AddressPrefix $databaseSubnetPrefix `
-    -NetworkSecurityGroup $databaseNsg
+    -AddressPrefix $databaseSubnetPrefix
 
 $managementSubnet = New-AzVirtualNetworkSubnetConfig -Name $managementSubnetName `
-    -AddressPrefix $managementSubnetPrefix `
-    -NetworkSecurityGroup $managementNsg
+    -AddressPrefix $managementSubnetPrefix
 
-Write-Host "Creating or updating Virtual Network '$vnetName' and subnets..."
-$vnet = New-AzVirtualNetwork -Name $vnetName `
+# --- Create Virtual Network with Subnets ---
+Write-Host "Creating Virtual Network '$vnetName' with subnets..."
+New-AzVirtualNetwork -Name $vnetName `
     -ResourceGroupName $resourceGroupName `
     -Location $location `
     -AddressPrefix $vnetAddressPrefix `
-    -Subnet $webserversSubnet, $databaseSubnet, $managementSubnet
+    -Subnet $webserversSubnet, $databaseSubnet, $managementSubnet | Out-Null
 
-Write-Host "Virtual Network '$vnetName' and subnets with associated NSGs deployed successfully!"
+Write-Host "Virtual Network '$vnetName' and its subnets deployed successfully!"
