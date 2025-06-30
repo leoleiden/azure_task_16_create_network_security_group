@@ -29,9 +29,10 @@ if (-not $resourceGroup) {
 
 # --- Create Network Security Groups and Rules ---
 
-# Common rule: Allow traffic within the VNet
-$vnetAllowRule = New-AzNetworkSecurityRuleConfig -Name "AllowVnetTraffic" `
-    -Description "Allow all traffic within the VNet" `
+# Webservers NSG
+Write-Host "Creating Network Security Group '$webserversSubnetName-nsg' and rules..."
+$webserversVnetAllowRule = New-AzNetworkSecurityRuleConfig -Name "AllowVnetTrafficWebservers" `
+    -Description "Allow all traffic within the VNet for webservers" `
     -Access Allow `
     -Protocol "*" `
     -Direction Inbound `
@@ -41,8 +42,6 @@ $vnetAllowRule = New-AzNetworkSecurityRuleConfig -Name "AllowVnetTraffic" `
     -DestinationAddressPrefix "*" `
     -DestinationPortRange "*"
 
-# Webservers NSG
-Write-Host "Creating Network Security Group '$webserversSubnetName-nsg' and rules..."
 $webserversHttpRule = New-AzNetworkSecurityRuleConfig -Name "AllowHTTP" `
     -Description "Allow HTTP from Internet" `
     -Access Allow `
@@ -68,23 +67,45 @@ $webserversHttpsRule = New-AzNetworkSecurityRuleConfig -Name "AllowHTTPS" `
 $webserversNsg = New-AzNetworkSecurityGroup -Name "$webserversSubnetName-nsg" `
     -ResourceGroupName $resourceGroupName `
     -Location $location `
-    -SecurityRules ($vnetAllowRule, $webserversHttpRule, $webserversHttpsRule)
+    -SecurityRules ($webserversVnetAllowRule, $webserversHttpRule, $webserversHttpsRule)
 
 Write-Host "NSG '$webserversSubnetName-nsg' created."
 
 # Database NSG
 Write-Host "Creating Network Security Group '$databaseSubnetName-nsg' and rules..."
+$databaseVnetAllowRule = New-AzNetworkSecurityRuleConfig -Name "AllowVnetTrafficDatabase" `
+    -Description "Allow all traffic within the VNet for database" `
+    -Access Allow `
+    -Protocol "*" `
+    -Direction Inbound `
+    -Priority 100 `
+    -SourceAddressPrefix $vnetAddressPrefix `
+    -SourcePortRange "*" `
+    -DestinationAddressPrefix "*" `
+    -DestinationPortRange "*"
+
 # No internet inbound traffic rules are explicitly defined for database.
 # Default deny rules will handle this.
 $databaseNsg = New-AzNetworkSecurityGroup -Name "$databaseSubnetName-nsg" `
     -ResourceGroupName $resourceGroupName `
     -Location $location `
-    -SecurityRules ($vnetAllowRule)
+    -SecurityRules ($databaseVnetAllowRule)
 
 Write-Host "NSG '$databaseSubnetName-nsg' created."
 
 # Management NSG
 Write-Host "Creating Network Security Group '$managementSubnetName-nsg' and rules..."
+$managementVnetAllowRule = New-AzNetworkSecurityRuleConfig -Name "AllowVnetTrafficManagement" `
+    -Description "Allow all traffic within the VNet for management" `
+    -Access Allow `
+    -Protocol "*" `
+    -Direction Inbound `
+    -Priority 100 `
+    -SourceAddressPrefix $vnetAddressPrefix `
+    -SourcePortRange "*" `
+    -DestinationAddressPrefix "*" `
+    -DestinationPortRange "*"
+
 $managementSshRule = New-AzNetworkSecurityRuleConfig -Name "AllowSSH" `
     -Description "Allow SSH from Internet" `
     -Access Allow `
@@ -99,7 +120,7 @@ $managementSshRule = New-AzNetworkSecurityRuleConfig -Name "AllowSSH" `
 $managementNsg = New-AzNetworkSecurityGroup -Name "$managementSubnetName-nsg" `
     -ResourceGroupName $resourceGroupName `
     -Location $location `
-    -SecurityRules ($vnetAllowRule, $managementSshRule)
+    -SecurityRules ($managementVnetAllowRule, $managementSshRule)
 
 Write-Host "NSG '$managementSubnetName-nsg' created."
 
